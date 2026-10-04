@@ -1,0 +1,15 @@
+{
+  "name": "orbis",
+  "version": "1.0.0",
+  "description": "A procedural world atlas: every seed is a planet, rendered in real time with WebGL2.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "build": "node scripts/build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  },
+  "license": "MIT"
+}
