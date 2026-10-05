@@ -39,6 +39,8 @@ export class App {
     this.warp = 0;
     this.fade = opts.fadeIn === false ? 1 : 0;
     this.octaves = opts.octaves ?? 12;
+    this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    if (this.reducedMotion) this.camera.autoSpin = 0;
     this.resize();
   }
 
@@ -161,6 +163,7 @@ export class App {
     const up = v3.cross(right, sun);
     let vis = 0;
     const N = 12;
+    const ringAxis = w.rings && this.settings.rings ? m3.apply(this.planetRotation().rot, [0, 1, 0]) : null;
     for (let i = 0; i < N; i++) {
       const a = (i / N) * Math.PI * 2;
       const r = i === 0 ? 0 : w.sunSize * 0.8;
@@ -179,9 +182,9 @@ export class App {
           if (cd < m.radius) s = 0;
         }
       }
-      if (w.rings && this.settings.rings) {
+      if (ringAxis) {
         // A dense ring in front of the sun dims the flare.
-        const axis = m3.apply(this.planetRotation().rot, [0, 1, 0]);
+        const axis = ringAxis;
         const dn = v3.dot(d, axis);
         if (Math.abs(dn) > 1e-4) {
           const t = -v3.dot(cam.pos, axis) / dn;
@@ -313,7 +316,7 @@ export class App {
     const post = {
       uBloomStrength: 0.06,
       uExposure: 0.5,
-      uWarp: this.warp,
+      uWarp: this.warp * (this.reducedMotion ? 0.25 : 1),
       uFade: smoothstep(0, 1, this.fade),
       uTime: this.time,
       uSunScreen: sv.scr,
@@ -328,12 +331,12 @@ export class App {
 
   // Render one still with a given lens shift and copy it out before the
   // drawing buffer is presented.
-  capture(shift = [0, 0]) {
+  capture(shift = [0, 0], { hires = false } = {}) {
     const old = [...this.camera.shift];
     this.camera.shift[0] = shift[0];
     this.camera.shift[1] = shift[1];
     const prevScale = this.scale;
-    this.scale = Math.max(this.scale, Math.min(1, this.maxScale * 1.2));
+    if (hires) this.scale = Math.max(this.scale, Math.min(1, this.maxScale * 1.2));
     this.resize();
     this.draw();
     const c = document.createElement('canvas');
@@ -388,6 +391,11 @@ export class App {
   // Keep the frame rate up by trading resolution.
   adaptResolution(dt) {
     if (this.opts.fixedScale) return;
+    if (this.transition) {
+      // Bake frames are slow by design; do not let them lower the resolution.
+      this.frameTimes.length = 0;
+      return;
+    }
     this.frameTimes.push(dt);
     if (this.frameTimes.length < 30) return;
     const avg = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;

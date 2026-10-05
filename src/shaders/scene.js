@@ -142,8 +142,11 @@ vec3 aurora(vec3 ro, vec3 rd, float t0, float t1) {
     float r = length(p);
     float h = (r - 1.0) / uAtmoH;
     if (h < 0.15 || h > 0.9) continue;
+    float night = smoothstep(0.1, -0.15, dot(p / r, uSunDir));
+    if (night <= 0.0) continue;
     vec3 q = transpose(uPlanetRot) * (p / r);
     float colat = acos(abs(q.y));
+    if (abs(colat - 0.36) > 0.14) continue;
     float ring = exp(-pow((colat - 0.36 - 0.04 * gnoise(vec3(q.xz * 3.0, 1.0))) / 0.035, 2.0));
     if (ring < 0.01) continue;
     float lon = atan(q.z, q.x);
@@ -151,7 +154,6 @@ vec3 aurora(vec3 ro, vec3 rd, float t0, float t1) {
     curtain = pow(curtain, 4.0) * (0.5 + 0.5 * gnoise(vec3(lon * 40.0, h * 2.0, uTime * 0.25)) + 0.5);
     float vert = smoothstep(0.15, 0.3, h) * smoothstep(0.9, 0.45, h);
     vec3 col = mix(uAurora, vec3(0.75, 0.2, 0.9), smoothstep(0.45, 0.85, h));
-    float night = smoothstep(0.1, -0.15, dot(p / r, uSunDir));
     acc += col * curtain * ring * vert * night * ds;
   }
   return acc * 9.0 * uAuroraOn;

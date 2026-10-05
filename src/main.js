@@ -4,6 +4,7 @@ import { Atlas, surveyRegions } from './atlas.js';
 import { fmt } from './format.js';
 import { Soundscape } from './audio.js';
 import { Postcard } from './postcard.js';
+import { Director } from './director.js';
 
 const params = new URLSearchParams(location.search);
 const $ = (id) => document.getElementById(id);
@@ -60,6 +61,12 @@ async function boot() {
   const ui = new UI(app, { atlas, postcard, sound: soundCtl });
   atlas.ui = ui;
   window.ui = ui;
+  const director = new Director(app, ui);
+  ui.extras.director = director;
+  app.renderer.canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    ui.toast('The graphics device was reset. Reload the page to continue exploring.', 600000);
+  });
   const peakText = () => {
     const w = app.world;
     ui.setPeak(w.peak ? `${w.peak.name} · ${fmt.int(w.peak.meters)} m` : 'Below sea level');
@@ -118,6 +125,8 @@ async function boot() {
   if (params.has('sun')) app.settings.sunAngle = +params.get('sun');
   if (params.has('time')) app.planetTime = +params.get('time');
   if (params.has('labels')) ui.toggleLabels(true);
+  if (params.has('tour')) director.toggle(true);
+  if (params.has('hideui')) ui.toggleHidden();
 
   let last = performance.now();
   const loop = (now) => {

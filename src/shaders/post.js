@@ -108,9 +108,10 @@ vec3 flare(vec2 uv) {
   }
   // Anamorphic streak and starburst at the sun.
   vec2 ds = (uv - sun) * vec2(aspect, 1.0);
-  float streak = exp(-abs(ds.y) * 220.0) * exp(-abs(ds.x) * 2.2) * 0.5;
+  float streak = exp(-abs(ds.y) * 260.0) * exp(-abs(ds.x) * 6.0) * 0.3;
   float ang = atan(ds.y, ds.x);
-  float rays = pow(abs(sin(ang * 6.0 + 0.4)), 40.0) * exp(-length(ds) * 7.0) * 0.6;
+  float rays = pow(abs(sin(ang * 6.0 + 0.4)), 60.0) * exp(-length(ds) * 11.0) * 0.4;
+  rays += pow(abs(sin(ang * 11.0 + 1.3)), 90.0) * exp(-length(ds) * 18.0) * 0.2;
   acc += vec3(0.55, 0.7, 1.0) * streak + vec3(1.0, 0.9, 0.8) * rays;
   return acc * uSunColor * uSunVis * uFlare;
 }

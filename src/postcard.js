@@ -33,7 +33,7 @@ export class Postcard {
     if (!w || app.transition) return;
     this.close();
     const aspect = app.canvas.width / app.canvas.height;
-    const shot = app.capture([aspect > 1.1 ? 0.22 : 0, aspect < 0.9 ? 0.18 : 0]);
+    const shot = app.capture([aspect > 1.1 ? 0.22 : 0, aspect < 0.9 ? 0.18 : 0], { hires: true });
     const card = this.compose(shot, w);
     const el = document.createElement('div');
     el.className = 'postcard';

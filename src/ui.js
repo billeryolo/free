@@ -33,6 +33,35 @@ function accentFor(world) {
   return linearToHex(oklabToLinear([0.84, a * k, b * k]));
 }
 
+// A log-scale strip of the planetary system: star, habitable zone (Kopparapu
+// et al. 2013 conservative limits), frost line and this planet's orbit.
+function orbitDiagram(w) {
+  const W = 320, H = 54, x0 = 14, x1 = W - 6;
+  const lo = Math.log10(0.01), hi = Math.log10(60);
+  const X = (au) => x0 + ((Math.log10(Math.max(au, 0.01)) - lo) / (hi - lo)) * (x1 - x0);
+  const L = w.star.lum;
+  const hzIn = Math.sqrt(L / 1.1), hzOut = Math.sqrt(L / 0.53);
+  const frost = 2.7 * Math.sqrt(L);
+  const a = w.phys.orbitAU;
+  const star = linearToHex(w.star.color);
+  const ticks = [0.01, 0.1, 1, 10].map((t) => `<line x1="${X(t)}" x2="${X(t)}" y1="30" y2="34" class="od-tick"/><text x="${X(t)}" y="46" class="od-axis">${t < 1 ? t : t.toFixed(0)}</text>`).join('');
+  const px = X(a);
+  const anchor = px > W - 70 ? 'end' : px < 60 ? 'start' : 'middle';
+  return `<svg class="orbit" viewBox="0 0 ${W} ${H}" role="img" aria-label="Orbit at ${fmt.fixed(a, 2)} AU; habitable zone ${fmt.fixed(hzIn, 2)} to ${fmt.fixed(hzOut, 2)} AU">
+    <defs><radialGradient id="od-star"><stop offset="0" stop-color="${star}"/><stop offset="1" stop-color="${star}" stop-opacity="0"/></radialGradient></defs>
+    <rect x="${X(hzIn)}" y="22" width="${Math.max(2, X(hzOut) - X(hzIn))}" height="12" class="od-hz"/>
+    <line x1="${x0}" x2="${x1}" y1="28" y2="28" class="od-line"/>
+    <line x1="${X(frost)}" x2="${X(frost)}" y1="20" y2="36" class="od-frost"/>
+    ${ticks}
+    <circle cx="4" cy="28" r="12" fill="url(#od-star)"/>
+    <circle cx="4" cy="28" r="3.5" fill="${star}"/>
+    <circle cx="${px}" cy="28" r="3.6" class="od-planet"/>
+    <text x="${px}" y="13" text-anchor="${anchor}" class="od-label">${fmt.fixed(a, a < 0.1 ? 3 : 2)} AU</text>
+    <text x="${x1}" y="46" text-anchor="end" class="od-axis">AU</text>
+  </svg>
+  <small class="od-legend"><i class="sw hz"></i>Habitable zone ${fmt.fixed(hzIn, 2)}–${fmt.fixed(hzOut, 2)} AU<i class="sw fr"></i>Frost line</small>`;
+}
+
 export class UI {
   constructor(app, extras = {}) {
     this.app = app;
@@ -58,6 +87,7 @@ export class UI {
 
   go(seed, cls, { push = true } = {}) {
     if (this.app.transition) return;
+    this.captureThumb();
     if (push) {
       this.history = this.history.slice(0, this.index + 1);
       this.history.push({ seed, cls });
@@ -88,6 +118,75 @@ export class UI {
     } else this.newWorld();
   }
 
+  // A small portrait of the current world for the logbook, cropped around the
+  // planet's disc in the live view.
+  captureThumb() {
+    const entry = this.history[this.index];
+    const app = this.app;
+    if (!entry || !app.world || app.vis < 0.99) return;
+    try {
+      const shot = app.capture(app.camera.shift);
+      const cam = app.camera;
+      const aspect = shot.width / shot.height;
+      const c = cam.projectPoint([0, 0, 0], aspect);
+      if (!c) return;
+      const ang = Math.asin(Math.min(1, 1 / cam.dist));
+      const rpx = (Math.tan(ang) / Math.tan(cam.fov / 2)) * (shot.height / 2) * 1.12;
+      const cx = c[0] * shot.width, cy = (1 - c[1]) * shot.height;
+      const t = document.createElement('canvas');
+      t.width = t.height = 96;
+      const g = t.getContext('2d');
+      g.fillStyle = '#04050a';
+      g.fillRect(0, 0, 96, 96);
+      g.drawImage(shot, cx - rpx, cy - rpx, rpx * 2, rpx * 2, 0, 0, 96, 96);
+      entry.thumb = t.toDataURL('image/jpeg', 0.82);
+    } catch {
+      /* thumbnails are optional */
+    }
+  }
+
+  toggleLog(force) {
+    const el = $('logbook');
+    const open = force ?? el.hidden;
+    el.hidden = !open;
+    $('btn-log').setAttribute('aria-pressed', String(open));
+    if (open) this.renderLog();
+  }
+
+  renderLog() {
+    const list = $('log-list');
+    $('log-count').textContent = `${this.history.length} world${this.history.length === 1 ? '' : 's'} visited this session`;
+    list.innerHTML = '';
+    this.history.forEach((h, i) => {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.setAttribute('aria-current', String(i === this.index));
+      const img = document.createElement(h.thumb ? 'img' : 'span');
+      img.className = 'thumb';
+      if (h.thumb) {
+        img.src = h.thumb;
+        img.alt = '';
+      }
+      const text = document.createElement('span');
+      text.innerHTML = `<span class="nm"></span><span class="meta"></span>`;
+      text.querySelector('.nm').textContent = h.name ?? '…';
+      text.querySelector('.meta').textContent = h.label ?? '';
+      const no = document.createElement('span');
+      no.className = 'no';
+      no.textContent = String(i + 1).padStart(2, '0');
+      b.append(img, text, no);
+      b.addEventListener('click', () => {
+        if (i === this.index || this.app.transition) return;
+        this.captureThumb();
+        this.index = i;
+        this.go(h.seed, h.cls, { push: false });
+        this.renderLog();
+      });
+      li.appendChild(b);
+      list.appendChild(li);
+    });
+  }
+
   recordInitial(world) {
     this.history = [{ seed: world.seed, cls: world.cls }];
     this.index = 0;
@@ -109,7 +208,9 @@ export class UI {
 
   onWorld(w) {
     // Keep history entries exact (class may have been chosen by the seed).
-    if (this.history[this.index]) this.history[this.index].cls = w.cls;
+    const entry = this.history[this.index];
+    if (entry) Object.assign(entry, { cls: w.cls, name: w.name, label: `${CLASSES[w.cls].short} · ${w.designation}` });
+    if (!$('logbook').hidden) this.renderLog();
     document.documentElement.style.setProperty('--accent', accentFor(w));
     $('designation').textContent = w.designation;
     $('star').textContent = `${w.star.spectral} star · ${fmt.fixed(w.phys.orbitAU, w.phys.orbitAU < 0.1 ? 3 : 2)} AU`;
@@ -157,6 +258,7 @@ export class UI {
     const rows = [];
     const row = (k, main, sub, id) => rows.push(`<dt>${k}</dt><dd${id ? ` id="${id}"` : ''}>${main}${sub ? `<small>${sub}</small>` : ''}</dd>`);
     row('Orbit', `${fmt.fixed(p.orbitAU, p.orbitAU < 0.1 ? 3 : 2)} AU · ${formatYear(p.yearDays)}`, `${w.star.spectral} star · ${fmt.int(w.star.temp)} K · ${fmt.fixed(w.star.lum, w.star.lum < 0.1 ? 3 : 2)} L☉`);
+    rows.push(`<dd class="wide">${orbitDiagram(w)}</dd>`);
     row('Size', `${fmt.fixed(p.radius, 2)} R⊕ · ${fmt.fixed(p.mass, p.mass < 10 ? 2 : 1)} M⊕`, `${fmt.int(p.radiusKm)} km radius · ${fmt.fixed(p.density, 2)} g/cm³`);
     row('Gravity', `${fmt.fixed(p.gravity, 2)} g`, `Escape velocity ${fmt.fixed(p.vesc, 1)} km/s`);
     row('Temperature', formatTemp(p.tempK), `Mean surface · ${formatCelsius(p.tempK)}`);
@@ -389,6 +491,7 @@ export class UI {
     const pointers = new Map();
     let pinch = 0;
     canvas.addEventListener('pointerdown', (e) => {
+      this.extras.director?.toggle(false);
       canvas.setPointerCapture(e.pointerId);
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       cam.dragging = true;
@@ -426,6 +529,7 @@ export class UI {
     canvas.addEventListener('pointercancel', up);
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
+      this.extras.director?.toggle(false);
       const d = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
       cam.zoom(Math.exp(clamp(d, -200, 200) * 0.0014));
       this.dismissHint();
@@ -438,7 +542,13 @@ export class UI {
       if (e.target instanceof HTMLInputElement && e.target.type !== 'range') return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
+      if (this.extras.director?.active && k !== 'c') {
+        this.extras.director.toggle(false);
+        if (k !== ' ' && k !== 'escape') return;
+      }
       const map = {
+        c: () => this.extras.director?.toggle(),
+        j: () => this.toggleLog(),
         ' ': () => this.newWorld(),
         n: () => this.newWorld(),
         arrowleft: () => this.prev(),
@@ -450,6 +560,7 @@ export class UI {
         m: () => this.extras.sound?.toggle(),
         p: () => this.extras.postcard?.open(),
         escape: () => {
+          this.toggleLog(false);
           this.extras.atlas?.close();
           this.extras.postcard?.close();
           this.toggleForge(false);
@@ -473,7 +584,11 @@ export class UI {
     $('btn-next').addEventListener('click', () => this.next());
     $('btn-forge').addEventListener('click', () => this.toggleForge());
     $('btn-forge-m').addEventListener('click', () => this.toggleForge());
+    $('btn-forge-close').addEventListener('click', () => this.toggleForge(false));
     $('btn-labels').addEventListener('click', () => this.toggleLabels());
+    $('btn-tour').addEventListener('click', () => this.extras.director?.toggle());
+    $('btn-log').addEventListener('click', () => this.toggleLog());
+    $('btn-log-close').addEventListener('click', () => this.toggleLog(false));
     $('btn-hide').addEventListener('click', () => this.toggleHidden());
     $('btn-share').addEventListener('click', () => this.share());
     $('btn-survey').addEventListener('click', () => {

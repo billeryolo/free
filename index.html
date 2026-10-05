@@ -131,6 +131,19 @@ button { cursor: pointer; }
 .survey dt { font-size: var(--t-xs); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); padding-top: 9px; }
 .survey dd { font-variant-numeric: tabular-nums; line-height: 1.45; color: var(--ink); }
 .survey dd small { display: block; color: var(--ink-dim); font-size: var(--t-xs); letter-spacing: 0.02em; }
+.survey dd.wide { grid-column: 1 / -1; border-top: 0; padding: 0 0 8px; }
+.orbit { display: block; width: 100%; height: auto; overflow: visible; }
+.orbit .od-line { stroke: var(--ink-faint); stroke-width: 1; }
+.orbit .od-tick { stroke: var(--ink-faint); }
+.orbit .od-hz { fill: color-mix(in srgb, #6fd3a0 22%, transparent); }
+.orbit .od-frost { stroke: #9cc8ff; stroke-width: 1; stroke-dasharray: 2 2; opacity: 0.7; }
+.orbit .od-planet { fill: var(--ink); stroke: var(--void); stroke-width: 1.5; }
+.orbit text { font-family: var(--mono); font-size: 9px; fill: var(--ink-dim); letter-spacing: 0.04em; }
+.orbit .od-label { fill: var(--ink); }
+.od-legend { display: flex !important; align-items: center; gap: 6px; margin-top: 2px; }
+.od-legend .sw { display: inline-block; width: 10px; height: 6px; }
+.od-legend .sw.hz { background: color-mix(in srgb, #6fd3a0 40%, transparent); }
+.od-legend .sw.fr { width: 1px; height: 9px; margin-left: 8px; border-left: 1px dashed #9cc8ff; }
 .esibar { display: block; height: 2px; margin-top: 6px; background: var(--ink-faint); position: relative; }
 .esibar i { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
 .survey-toggle { display: none; }
@@ -273,6 +286,7 @@ kbd {
   animation: rise 0.35s cubic-bezier(.2,.7,.2,1);
 }
 @keyframes rise { from { opacity: 0; transform: translateY(10px) scale(0.98); } }
+.forge-head { display: flex; justify-content: space-between; align-items: center; margin: -6px -8px 0 0; }
 .forge h2 { margin: 0; font-family: var(--display); font-style: italic; font-weight: 400; font-size: 26px; }
 .forge p.sub { margin: -8px 0 2px; color: var(--ink-dim); font-size: var(--t-xs); line-height: 1.5; }
 .ctl { display: grid; gap: 6px; }
@@ -315,6 +329,46 @@ input[type="range"]::-moz-range-thumb {
 .toggles .chip[aria-pressed="true"] { color: var(--void); background: var(--ink); border-color: var(--ink); }
 .forge .actions { display: flex; gap: 8px; }
 .forge .actions .btn { height: 36px; padding: 0 14px; font-size: var(--t-xs); flex: 1; justify-content: center; }
+
+.logbook {
+  position: absolute;
+  top: calc(var(--edge) + env(safe-area-inset-top, 0px) + 50px);
+  right: calc(var(--edge) + env(safe-area-inset-right, 0px));
+  width: 300px;
+  max-height: calc(100% - 260px);
+  overflow-y: auto;
+  padding: 18px 20px 14px;
+  background: var(--panel);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid var(--ink-ghost);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: rise 0.35s cubic-bezier(.2,.7,.2,1);
+}
+.logbook h2 { margin: 0; font-family: var(--display); font-style: italic; font-weight: 400; font-size: 26px; }
+.logbook p.sub { margin: -8px 0 0; color: var(--ink-dim); font-size: var(--t-xs); }
+.logbook ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: log; }
+.logbook li button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 6px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: none;
+  text-align: left;
+}
+.logbook li button:hover { border-color: var(--ink-faint); }
+.logbook li button[aria-current="true"] { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.logbook .thumb { width: 48px; height: 48px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, var(--ink-faint), transparent 70%); object-fit: cover; }
+.logbook .nm { font-family: var(--display); font-style: italic; font-size: 19px; line-height: 1.1; display: block; }
+.logbook .meta { font-size: var(--t-xs); color: var(--ink-dim); letter-spacing: 0.04em; display: block; margin-top: 3px; }
+.logbook .no { font-size: var(--t-xs); color: var(--ink-dim); font-variant-numeric: tabular-nums; }
 
 /* --- globe labels ------------------------------------------------------- */
 .labels { position: absolute; inset: 0; pointer-events: none !important; overflow: hidden; }
@@ -374,6 +428,12 @@ input[type="range"]::-moz-range-thumb {
 .postcard img { max-width: min(1000px, 100%); max-height: calc(100vh - 180px); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7); }
 .postcard figcaption { color: var(--ink-dim); font-size: var(--t-xs); letter-spacing: 0.08em; text-align: center; }
 .postcard .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+/* --- tour ------------------------------------------------------------------ */
+#ui.touring > :not(.left):not(.toast):not(.labels) { opacity: 0; pointer-events: none; transition: opacity 0.8s ease; }
+#ui.touring .survey { opacity: 0 !important; pointer-events: none; }
+#ui.touring .catalog.tour-name { animation: tourName 16s ease forwards; }
+@keyframes tourName { 0% { opacity: 0; } 6% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
 
 /* --- misc ------------------------------------------------------------------ */
 .hint {
@@ -450,6 +510,7 @@ input[type="range"]::-moz-range-thumb {
   .mobile-only { display: grid; }
   .forge-toggle { display: none; }
   .hint { display: none; }
+  .logbook { width: calc(100% - 2 * var(--edge) - 50px); right: calc(var(--edge) + 46px); top: calc(var(--edge) + env(safe-area-inset-top, 0px) + 90px); max-height: 50vh; }
   .forge { width: calc(100% - 2 * var(--edge)); bottom: calc(var(--edge) + env(safe-area-inset-bottom, 0px) + 130px); max-height: 55vh; }
   .travel { gap: 10px; }
   .btn { height: 42px; padding: 0 16px; }
@@ -495,6 +556,12 @@ input[type="range"]::-moz-range-thumb {
     <button class="icon" id="btn-sound" aria-pressed="false" data-tip="Sound · M" aria-label="Sound">
       <svg viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6L8 10z"/><path class="wave" d="M16.5 9a4 4 0 010 6 M19 6.5a7.5 7.5 0 010 11"/></svg>
     </button>
+    <button class="icon" id="btn-log" aria-pressed="false" data-tip="Logbook · J" aria-label="Logbook" aria-controls="logbook">
+      <svg viewBox="0 0 24 24"><path d="M6 4.5h10.5a1.5 1.5 0 011.5 1.5v13.5H7.5A1.5 1.5 0 016 18z M6 18a1.5 1.5 0 011.5-1.5H18 M9.5 8h5 M9.5 11h3.5"/></svg>
+    </button>
+    <button class="icon" id="btn-tour" aria-pressed="false" data-tip="Cinematic tour · C" aria-label="Cinematic tour">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M10.2 8.6l5 3.4-5 3.4z"/></svg>
+    </button>
     <button class="icon" id="btn-postcard" data-tip="Postcard · P" aria-label="Make a postcard">
       <svg viewBox="0 0 24 24"><rect x="3.5" y="6.5" width="17" height="12" rx="1.5"/><circle cx="12" cy="12.5" r="3.2"/><path d="M8.5 6.5l1.2-2h4.6l1.2 2"/></svg>
     </button>
@@ -520,7 +587,7 @@ input[type="range"]::-moz-range-thumb {
 
   <button class="btn forge-toggle" id="btn-forge" aria-expanded="false" aria-controls="forge">Forge</button>
   <aside class="forge" id="forge" hidden aria-label="Forge">
-    <h2>Forge</h2>
+    <div class="forge-head"><h2>Forge</h2><button class="icon" id="btn-forge-close" aria-label="Close forge"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg></button></div>
     <p class="sub">Reshape this world. Changes apply instantly and are not saved.</p>
     <div id="controls" style="display: grid; gap: 12px;"></div>
     <div class="toggles" id="toggles"></div>
@@ -528,6 +595,12 @@ input[type="range"]::-moz-range-thumb {
       <button class="btn" id="btn-reroll">New terrain</button>
       <button class="btn" id="btn-reset">Reset</button>
     </div>
+  </aside>
+
+  <aside class="logbook" id="logbook" hidden aria-label="Logbook">
+    <div class="forge-head"><h2>Logbook</h2><button class="icon" id="btn-log-close" aria-label="Close logbook"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg></button></div>
+    <p class="sub" id="log-count"></p>
+    <ol id="log-list"></ol>
   </aside>
 
   <div class="labels" id="labels" aria-hidden="true"></div>

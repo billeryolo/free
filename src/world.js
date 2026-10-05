@@ -323,7 +323,7 @@ export function generateWorld(seed, forcedClass) {
 
   // ---- atmosphere
   const atmoProfiles = {
-    terran: { h: [0.028, 0.04], tau: EARTH_TAU, tauM: 0.022, abs: [0, 0, 0], density: [0.6, 0.9], g: 0.76, pressure: [0.7, 1.6] },
+    terran: { h: [0.028, 0.04], tau: EARTH_TAU, tauM: 0.035, abs: [0, 0, 0], density: [0.6, 0.9], g: 0.76, pressure: [0.7, 1.6] },
     ocean: { h: [0.032, 0.045], tau: EARTH_TAU.map((v) => v * 1.15), tauM: 0.035, abs: [0, 0, 0], density: [0.7, 1.0], g: 0.78, pressure: [1.2, 3.5] },
     exotic: { h: [0.03, 0.045], tau: null, tauM: 0.03, abs: [0, 0, 0], density: [0.6, 1.0], g: 0.76, pressure: [0.6, 2.2] },
     arid: { h: [0.022, 0.035], tau: EARTH_TAU.map((v) => v * 0.45), tauM: 0.08, mie: [1.0, 0.62, 0.36], abs: [0.0, 0.02, 0.05], density: [0.6, 1.1], g: 0.8, pressure: [0.01, 0.6] },
