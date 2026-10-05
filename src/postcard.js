@@ -3,6 +3,15 @@
 
 import { fmt, hydrosphereValue } from './format.js';
 
+// Inside the claude.ai viewer, files go through the `downloads` capability;
+// on an ordinary host a plain download link works.
+let downloadsPromise = null;
+function getDownloads() {
+  if (!window.claude?.use) return Promise.resolve(undefined);
+  downloadsPromise ??= window.claude.use('downloads').catch(() => null);
+  return downloadsPromise;
+}
+
 export class Postcard {
   constructor(app) {
     this.app = app;
@@ -30,25 +39,53 @@ export class Postcard {
     el.className = 'postcard';
     el.setAttribute('role', 'dialog');
     el.setAttribute('aria-label', `Postcard from ${w.name}`);
+    const filename = `${w.name.replace(/\s+/g, '-').toLowerCase()}-postcard.png`;
     el.innerHTML = `
       <figure>
         <img alt="Postcard of ${w.name}, ${w.classLabel.toLowerCase()}">
-        <figcaption>If the save button is blocked here, right-click or long-press the image to keep it.</figcaption>
+        <figcaption>${card.width} × ${card.height} PNG</figcaption>
         <div class="actions">
-          <a class="btn primary" download="${w.name.replace(/\s+/g, '-').toLowerCase()}-postcard.png">Save image</a>
+          <a class="btn primary" data-save download="${filename}">Save image</a>
           <button class="btn" data-close>Close</button>
         </div>
       </figure>`;
     document.getElementById('ui').appendChild(el);
     this.el = el;
+    const save = el.querySelector('[data-save]');
+    const caption = el.querySelector('figcaption');
     el.querySelector('[data-close]').addEventListener('click', () => this.close());
     el.addEventListener('click', (e) => { if (e.target === el) this.close(); });
-    card.toBlob((blob) => {
-      if (!blob || !this.el) return;
-      this.url = URL.createObjectURL(blob);
+    let blob = null;
+    card.toBlob((b) => {
+      if (!b || !this.el) return;
+      blob = b;
+      this.url = URL.createObjectURL(b);
       el.querySelector('img').src = this.url;
-      el.querySelector('a').href = this.url;
+      save.href = this.url;
     }, 'image/png');
+    getDownloads().then((downloads) => {
+      if (downloads === undefined || !this.el) return;
+      if (downloads === null) {
+        save.hidden = true;
+        caption.textContent = 'Right-click or long-press the image to keep it.';
+        return;
+      }
+      save.removeAttribute('download');
+      save.removeAttribute('href');
+      save.setAttribute('role', 'button');
+      save.tabIndex = 0;
+      save.addEventListener('click', async (e) => {
+        e.preventDefault();
+        if (!blob) return;
+        try {
+          await downloads.save({ filename, data: blob });
+          caption.textContent = 'Postcard saved.';
+        } catch (err) {
+          if (err?.code === 'declined') return;
+          caption.textContent = 'Saving is not available here. Right-click or long-press the image to keep it.';
+        }
+      });
+    });
   }
 
   compose(shot, w) {

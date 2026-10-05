@@ -361,12 +361,16 @@ export class UI {
   async share() {
     const w = this.app.world;
     const code = worldCode(w);
-    const url = `${location.href.split('#')[0]}#${code}`;
+    // Inside an embedding frame our own URL is not the one people can open,
+    // so share the world code, which works after # on the page's real link.
+    let framed = false;
+    try { framed = window.self !== window.top; } catch { framed = true; }
+    const text = framed ? code : `${location.href.split('#')[0]}#${code}`;
     try {
-      await navigator.clipboard.writeText(url);
-      this.toast(`Link copied · world ${code}`);
+      await navigator.clipboard.writeText(text);
+      this.toast(framed ? `Copied world code ${code} · add it after # in this page's link` : `Link copied · world ${code}`, framed ? 5000 : 2200);
     } catch {
-      this.toast(`World code: ${code}`, 4000);
+      this.toast(`World code ${code} · add it after # in this page's link`, 6000);
     }
   }
 
