@@ -133,7 +133,10 @@ Surface surfaceAt(vec3 q, float footprint) {
 
   vec3 landCol;
   if (uStyle == 0) {
-    vec3 veg = mix(uLowDry, uLowWet, smoothstep(0.26, 0.5, moist));
+    // Arid ground varies between sand, ochre and bare rock.
+    vec3 dry = mix(uLowDry, mix(uHigh, uRock, 0.5), smoothstep(0.1, 0.9, T.w * 0.6 + 0.5 + vary * 0.35) * 0.55);
+    dry *= 0.86 + 0.28 * smoothstep(-0.6, 0.6, vary);
+    vec3 veg = mix(dry, uLowWet * (0.85 + 0.3 * smoothstep(-0.5, 0.5, vary)), smoothstep(0.26, 0.5, moist));
     vec3 tundra = mix(uHigh, uLowDry, 0.35);
     veg = mix(veg, tundra, smoothstep(0.38, 0.12, temp));
     landCol = mix(veg, uHigh, smoothstep(0.22, 0.62, e + vary * 0.06));
@@ -198,11 +201,11 @@ Surface surfaceAt(vec3 q, float footprint) {
   } else {
     seaCol = mix(uShallow, uDeep, smoothstep(0.0, 0.18, dep + patchy * 0.02));
     seaCol = mix(seaCol, uShallow * 1.15, smoothstep(0.02, 0.0, dep) * 0.4);
-    float freeze = max(uIceSea, smoothstep(0.02, -0.06, temp + dep * 0.05));
+    float edge = gnoise(q * 5.0 + 3.0) * 0.6 + gnoise(q * 13.0) * 0.3 + gnoise(q * 37.0) * 0.12;
+    float freeze = max(uIceSea, smoothstep(0.05, -0.05, temp + dep * 0.05 + edge * 0.16));
     if (freeze > 0.0) {
-      vec3 v = voronoi(q * 24.0);
-      float floes = smoothstep(0.0, 0.06, v.y - v.x);
-      vec3 seaIce = mix(uSnow * 0.7, uSnow * 0.92, floes) * (0.92 + 0.08 * v.z);
+      float floes = 0.5 + 0.5 * gnoise(q * 90.0 + edge);
+      vec3 seaIce = mix(uSnow * 0.78, uSnow * 0.95, floes) * (0.94 + 0.06 * edge);
       seaCol = mix(seaCol, seaIce, freeze);
       seaWater = 1.0 - freeze;
     }

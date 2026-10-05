@@ -190,7 +190,8 @@ export class App {
             const rr = v3.len(hp);
             if (rr > w.rings.inner && rr < w.rings.outer) {
               const u = (rr - w.rings.inner) / (w.rings.outer - w.rings.inner);
-              const idx = Math.min(1023, Math.floor(u * 1023));
+              const n = w.rings.data.length / 4 - 1;
+              const idx = Math.min(n, Math.floor(u * n));
               s *= 1 - (w.rings.data[idx * 4 + 3] / 255) * 0.9;
             }
           }
@@ -228,6 +229,7 @@ export class App {
       uCamPos: cam.pos,
       uCamBasis: cam.basis,
       uTanFov: Math.tan(cam.fov / 2),
+      uShift: cam.shift,
       uPixelAngle: (2 * Math.tan(cam.fov / 2)) / this.renderer.hdr.h,
       uTime: this.planetTime,
       uCloudTime: this.planetTime,
@@ -275,15 +277,34 @@ export class App {
     return wb.map((v) => v / lum);
   }
 
+  // Resting distance and lens shift: leave room for the survey on wide screens.
+  homeDist() {
+    const aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight);
+    const tanHalf = Math.tan(this.camera.fov / 2) * Math.min(1, aspect);
+    const k = aspect >= 1 ? 0.72 : 0.82;
+    return 1 / Math.sin(Math.atan(tanHalf * k));
+  }
+
   frame(dt) {
     dt = Math.min(dt, 0.1);
+    const aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight);
+    const wide = this.canvas.clientWidth > 900 && aspect > 1.2;
+    const sx = wide && !this.uiHidden ? 0.16 : 0;
+    const sy = aspect < 0.8 ? 0.12 : 0;
+    this.camera.shift[0] += (sx - this.camera.shift[0]) * Math.min(1, dt * 3);
+    this.camera.shift[1] += (sy - this.camera.shift[1]) * Math.min(1, dt * 3);
     this.time += dt;
     this.planetTime += dt * this.settings.timeScale;
     this.fade = Math.min(1, this.fade + dt * 0.7);
     this.stepTransition(dt);
     this.camera.update(dt);
     if (!this.world) return;
+    const info = this.draw();
+    this.emit('frame', { dt, ...info });
+    this.adaptResolution(dt);
+  }
 
+  draw() {
     const { u, sun, moons, rot } = this.sceneUniforms();
     const wb = this.whiteBalance(u);
     this.lastRot = rot;
@@ -302,8 +323,28 @@ export class App {
       uWhite: wb,
     };
     this.renderer.render(u, post);
-    this.emit('frame', { dt, rot, sun, moons });
-    this.adaptResolution(dt);
+    return { rot, sun, moons };
+  }
+
+  // Render one still with a given lens shift and copy it out before the
+  // drawing buffer is presented.
+  capture(shift = [0, 0]) {
+    const old = [...this.camera.shift];
+    this.camera.shift[0] = shift[0];
+    this.camera.shift[1] = shift[1];
+    const prevScale = this.scale;
+    this.scale = Math.max(this.scale, Math.min(1, this.maxScale * 1.2));
+    this.resize();
+    this.draw();
+    const c = document.createElement('canvas');
+    c.width = this.canvas.width;
+    c.height = this.canvas.height;
+    c.getContext('2d').drawImage(this.canvas, 0, 0);
+    this.camera.shift[0] = old[0];
+    this.camera.shift[1] = old[1];
+    this.scale = prevScale;
+    this.resize();
+    return c;
   }
 
   stepTransition(dt) {
@@ -327,7 +368,7 @@ export class App {
       if (!tr.steps.length) {
         this.setWorld(tr.world);
         this.camera.dist = 8;
-        this.camera.target.dist = 3.6;
+        this.camera.target.dist = this.homeDist();
         tr.phase = 'in';
         tr.t = 0;
       }

@@ -4,13 +4,13 @@
 import { v3, clamp, smoothstep } from './util.js';
 
 export const MIN_DIST = 1.035;
-export const MAX_DIST = 14;
+export const MAX_DIST = 18;
 
 export class OrbitCamera {
   constructor() {
     this.yaw = -0.35;
     this.pitch = 0.22;
-    this.dist = 3.6;
+    this.dist = 4.4;
     this.target = { yaw: this.yaw, pitch: this.pitch, dist: this.dist };
     this.vel = { yaw: 0, pitch: 0 };
     this.fov = (36 * Math.PI) / 180;
@@ -23,6 +23,7 @@ export class OrbitCamera {
     this.dragging = false;
     this.idle = 0;
     this.autoSpin = 0.018;
+    this.shift = [0, 0];
   }
 
   drag(dx, dy) {
@@ -94,8 +95,8 @@ export class OrbitCamera {
     const z = v3.dot(d, this.fwd);
     if (z <= 1e-4) return null;
     const t = Math.tan(this.fov / 2);
-    const x = v3.dot(d, this.right) / (z * t * aspect);
-    const y = v3.dot(d, this.up) / (z * t);
+    const x = v3.dot(d, this.right) / (z * t * aspect) + this.shift[0];
+    const y = v3.dot(d, this.up) / (z * t) + this.shift[1];
     return [x * 0.5 + 0.5, y * 0.5 + 0.5];
   }
 

@@ -4,13 +4,550 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Orbis</title>
+<meta name="description" content="A procedural atlas of worlds: every seed is a planet, rendered in real time.">
+<!--BUILD:HEAD-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;1,6..96,400;1,6..96,500&family=Martian+Mono:wdth,wght@87.5,300;87.5,400;87.5,500&display=swap">
 <style>
-html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
-#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+/* Layout: a full-bleed viewport with sparse annotations pinned to its edges,
+   like the marks around an astronomical survey plate. */
+:root {
+  --void: #04050a;
+  --ink: #ece6d8;
+  --ink-dim: rgba(236, 230, 216, 0.62);
+  --ink-faint: rgba(236, 230, 216, 0.16);
+  --ink-ghost: rgba(236, 230, 216, 0.07);
+  --panel: rgba(7, 9, 15, 0.66);
+  --accent: #9cc3ff;
+  --display: "Bodoni Moda", "Bodoni 72", Didot, "Big Caslon", Georgia, serif;
+  --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --edge: clamp(16px, 3vw, 40px);
+  --t-xs: 10px;
+  --t-sm: 11.5px;
+  --t-md: 13px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--void);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-stretch: 87.5%;
+  font-size: var(--t-sm);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+#view {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+#view.dragging { cursor: grabbing; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 1px solid var(--accent); outline-offset: 3px; }
+
+#ui { position: fixed; inset: 0; pointer-events: none; transition: opacity 0.6s ease; }
+#ui > * { pointer-events: auto; }
+#ui.hidden, #ui.pre { opacity: 0; }
+#ui.hidden > *, #ui.pre > * { pointer-events: none; }
+
+.label {
+  font-size: var(--t-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+/* --- catalog entry -------------------------------------------------------- */
+.left {
+  position: absolute;
+  top: calc(var(--edge) + env(safe-area-inset-top, 0px));
+  left: calc(var(--edge) + env(safe-area-inset-left, 0px));
+  bottom: calc(var(--edge) + env(safe-area-inset-bottom, 0px) + 120px);
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  pointer-events: none !important;
+}
+.catalog {
+  max-width: min(46ch, 70vw);
+  pointer-events: none;
+}
+.catalog .eyebrow { margin: 0 0 6px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.catalog .eyebrow .sep { width: 18px; height: 1px; background: var(--ink-faint); }
+.catalog h1 {
+  margin: 0;
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 400;
+  font-size: calc(clamp(40px, 6.4vw, 92px) * var(--name-scale, 1));
+  line-height: 0.95;
+  letter-spacing: -0.01em;
+  font-variation-settings: "opsz" 96;
+  text-wrap: balance;
+  text-shadow: 0 2px 30px rgba(0, 0, 0, 0.6);
+}
+.catalog h1 .ch { display: inline-block; opacity: 0; transform: translateY(0.18em); filter: blur(6px); animation: letter 0.9s cubic-bezier(.2,.7,.2,1) forwards; }
+@keyframes letter { to { opacity: 1; transform: none; filter: none; } }
+.catalog .cls {
+  margin: 10px 0 0;
+  font-size: var(--t-md);
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+.catalog .cls .esi { color: var(--ink-dim); margin-left: 10px; }
+
+/* --- survey record -------------------------------------------------------- */
+.survey {
+  pointer-events: auto;
+  flex: 0 1 auto;
+  min-height: 0;
+  width: 340px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  transition: opacity 0.4s ease;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+}
+.survey::-webkit-scrollbar { display: none; }
+.survey dl { margin: 0; display: grid; grid-template-columns: 104px 1fr; }
+.survey dt, .survey dd {
+  margin: 0;
+  padding: 6px 0;
+  border-top: 1px solid var(--ink-ghost);
+  min-width: 0;
+}
+.survey dt { font-size: var(--t-xs); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); padding-top: 9px; }
+.survey dd { font-variant-numeric: tabular-nums; line-height: 1.45; color: var(--ink); }
+.survey dd small { display: block; color: var(--ink-dim); font-size: var(--t-xs); letter-spacing: 0.02em; }
+.esibar { display: block; height: 2px; margin-top: 6px; background: var(--ink-faint); position: relative; }
+.esibar i { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
+.survey-toggle { display: none; }
+.mobile-only { display: none; }
+
+/* --- tools ------------------------------------------------------------- */
+.tools {
+  position: absolute;
+  top: calc(var(--edge) + env(safe-area-inset-top, 0px));
+  right: calc(var(--edge) + env(safe-area-inset-right, 0px));
+  display: flex;
+  gap: 4px;
+}
+.icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  color: var(--ink-dim);
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  position: relative;
+}
+.icon:hover { color: var(--ink); border-color: var(--ink-faint); }
+.icon[aria-pressed="true"] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.icon[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  white-space: nowrap;
+  font-size: var(--t-xs);
+  letter-spacing: 0.08em;
+  color: var(--ink);
+  background: var(--panel);
+  padding: 6px 9px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* --- travel bar ----------------------------------------------------------- */
+.travel {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--edge) + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: min(760px, calc(100% - 2 * var(--edge)));
+}
+@media (min-width: 761px) {
+  .travel { width: min(700px, calc(100% - 2 * (var(--edge) + 360px))); }
+}
+.chips {
+  display: flex;
+  gap: 2px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px 24px;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 99px;
+  padding: 6px 11px;
+  font-size: var(--t-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  transition: color 0.2s, border-color 0.2s;
+}
+.chip:hover { color: var(--ink); }
+.chip[aria-checked="true"] { color: var(--ink); border-color: var(--ink-faint); }
+.jump { display: flex; align-items: center; gap: 10px; }
+.btn {
+  height: 44px;
+  border-radius: 99px;
+  border: 1px solid var(--ink-faint);
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 0 22px;
+  letter-spacing: 0.08em;
+  font-size: var(--t-sm);
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+  text-decoration: none;
+}
+.btn:hover { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.btn.round { width: 44px; padding: 0; justify-content: center; font-size: 18px; }
+.btn.primary { color: var(--void); background: var(--ink); border-color: var(--ink); }
+.btn.primary:hover { background: #fff; }
+.btn:disabled { opacity: 0.35; cursor: default; }
+kbd {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  padding: 3px 6px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  opacity: 0.55;
+}
+
+/* --- forge ---------------------------------------------------------------- */
+.forge-toggle {
+  position: absolute;
+  right: calc(var(--edge) + env(safe-area-inset-right, 0px));
+  bottom: calc(var(--edge) + env(safe-area-inset-bottom, 0px));
+}
+.forge {
+  position: absolute;
+  right: calc(var(--edge) + env(safe-area-inset-right, 0px));
+  bottom: calc(var(--edge) + env(safe-area-inset-bottom, 0px) + 58px);
+  width: 300px;
+  max-height: calc(100% - 200px);
+  overflow-y: auto;
+  padding: 18px 20px 20px;
+  background: var(--panel);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid var(--ink-ghost);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transform-origin: bottom right;
+  animation: rise 0.35s cubic-bezier(.2,.7,.2,1);
+}
+@keyframes rise { from { opacity: 0; transform: translateY(10px) scale(0.98); } }
+.forge h2 { margin: 0; font-family: var(--display); font-style: italic; font-weight: 400; font-size: 26px; }
+.forge p.sub { margin: -8px 0 2px; color: var(--ink-dim); font-size: var(--t-xs); line-height: 1.5; }
+.ctl { display: grid; gap: 6px; }
+.ctl .row { display: flex; justify-content: space-between; align-items: baseline; }
+.ctl output { font-variant-numeric: tabular-nums; color: var(--ink); font-size: var(--t-xs); }
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  margin: 0;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 1px;
+  background: linear-gradient(to right, var(--accent) var(--p, 50%), var(--ink-faint) var(--p, 50%));
+}
+input[type="range"]::-moz-range-track { height: 1px; background: var(--ink-faint); }
+input[type="range"]::-moz-range-progress { height: 1px; background: var(--accent); }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 3px solid var(--void);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 3px solid var(--void);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+.toggles { display: flex; flex-wrap: wrap; gap: 6px; }
+.toggles .chip { border-color: var(--ink-faint); }
+.toggles .chip[aria-pressed="true"] { color: var(--void); background: var(--ink); border-color: var(--ink); }
+.forge .actions { display: flex; gap: 8px; }
+.forge .actions .btn { height: 36px; padding: 0 14px; font-size: var(--t-xs); flex: 1; justify-content: center; }
+
+/* --- globe labels ------------------------------------------------------- */
+.labels { position: absolute; inset: 0; pointer-events: none !important; overflow: hidden; }
+.glabel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  font-family: var(--display);
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.8);
+  transition: opacity 0.3s;
+  will-change: transform, opacity;
+}
+.glabel.land { font-size: 12px; letter-spacing: 0.32em; text-transform: uppercase; font-weight: 500; }
+.glabel.sea { font-size: 13px; font-style: italic; letter-spacing: 0.12em; color: rgba(200, 225, 255, 0.85); }
+.glabel.peak { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.06em; color: rgba(255, 255, 255, 0.85); }
+.glabel.peak::before { content: "▲ "; font-size: 7px; vertical-align: 1px; }
+.glabel.moon { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); transform: translate(12px, -50%); }
+.glabel.moon::before { content: ""; display: inline-block; width: 14px; height: 1px; background: var(--ink-faint); vertical-align: middle; margin-right: 6px; }
+
+/* --- atlas plate -------------------------------------------------------- */
+.atlas {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 4, 8, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: calc(var(--edge) + env(safe-area-inset-top, 0px)) var(--edge) calc(var(--edge) + env(safe-area-inset-bottom, 0px));
+  animation: fade 0.4s ease;
+  z-index: 5;
+}
+@keyframes fade { from { opacity: 0; } }
+.atlas figure { margin: 0; width: min(1100px, 100%); display: grid; gap: 14px; }
+.atlas header { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; }
+.atlas h2 { margin: 0; font-family: var(--display); font-style: italic; font-weight: 400; font-size: clamp(26px, 4vw, 44px); line-height: 1; }
+.atlas .plate { position: relative; width: 100%; aspect-ratio: 2 / 1; max-width: 100%; border: 1px solid var(--ink-faint); }
+.atlas canvas { width: 100%; height: 100%; display: block; }
+.atlas figcaption { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; color: var(--ink-dim); font-size: var(--t-xs); letter-spacing: 0.08em; }
+.atlas .close { position: absolute; top: calc(var(--edge) + env(safe-area-inset-top, 0px)); right: var(--edge); }
+
+/* --- postcard ------------------------------------------------------------ */
+.postcard {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 4, 8, 0.8);
+  padding: var(--edge);
+  z-index: 6;
+  animation: fade 0.3s ease;
+}
+.postcard figure { margin: 0; display: grid; gap: 14px; justify-items: center; max-width: 100%; }
+.postcard img { max-width: min(1000px, 100%); max-height: calc(100vh - 180px); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7); }
+.postcard figcaption { color: var(--ink-dim); font-size: var(--t-xs); letter-spacing: 0.08em; text-align: center; }
+.postcard .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+/* --- misc ------------------------------------------------------------------ */
+.hint {
+  position: absolute;
+  left: calc(var(--edge) + env(safe-area-inset-left, 0px));
+  bottom: calc(var(--edge) + env(safe-area-inset-bottom, 0px));
+  max-width: 220px;
+  color: var(--ink-dim);
+  font-size: var(--t-xs);
+  line-height: 1.7;
+  letter-spacing: 0.04em;
+  transition: opacity 1.2s ease;
+  pointer-events: none !important;
+}
+.toast {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--edge) + env(safe-area-inset-top, 0px));
+  transform: translate(-50%, -8px);
+  padding: 9px 16px;
+  border-radius: 99px;
+  background: var(--panel);
+  border: 1px solid var(--ink-faint);
+  font-size: var(--t-xs);
+  letter-spacing: 0.1em;
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none !important;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+.intro {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: var(--edge);
+  background: radial-gradient(ellipse at 50% 60%, rgba(4, 5, 10, 0.2), rgba(4, 5, 10, 0.92) 70%);
+  z-index: 10;
+  transition: opacity 1.4s ease;
+}
+.intro.gone { opacity: 0; pointer-events: none; }
+.intro .mark { font-family: var(--display); font-weight: 400; font-size: clamp(64px, 15vw, 180px); line-height: 0.9; letter-spacing: 0.04em; margin: 0; font-variation-settings: "opsz" 96; }
+.intro .mark em { font-style: italic; }
+.intro p { margin: 18px auto 0; max-width: 46ch; color: var(--ink-dim); line-height: 1.7; font-size: var(--t-sm); }
+.intro .go { margin-top: 34px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.intro .status { margin-top: 18px; font-size: var(--t-xs); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); min-height: 1em; }
+.intro .fallback { display: none; }
+.intro.error .fallback { display: block; color: var(--ink); }
+.intro.error .go { display: none; }
+
+@media (max-width: 760px) {
+  .left { width: calc(100% - 2 * var(--edge) - 50px); bottom: auto; }
+  .catalog { max-width: 100%; }
+  .catalog h1 { font-size: calc(clamp(36px, 11vw, 56px) * var(--name-scale, 1)); }
+  .tools { flex-direction: column; }
+  .survey {
+    position: fixed;
+    left: var(--edge);
+    top: auto;
+    bottom: calc(var(--edge) + env(safe-area-inset-bottom, 0px) + 130px);
+    width: calc(100% - 2 * var(--edge));
+    max-height: 42vh;
+    background: var(--panel);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--ink-ghost);
+    border-radius: 12px;
+    padding: 4px 14px 8px;
+  }
+  .survey:not(.open) { display: none; }
+  .survey-toggle { display: grid; }
+  .mobile-only { display: grid; }
+  .forge-toggle { display: none; }
+  .hint { display: none; }
+  .forge { width: calc(100% - 2 * var(--edge)); bottom: calc(var(--edge) + env(safe-area-inset-bottom, 0px) + 130px); max-height: 55vh; }
+  .travel { gap: 10px; }
+  .btn { height: 42px; padding: 0 16px; }
+  .btn .kbd-hint { display: none; }
+}
+@media (hover: none) {
+  .icon[data-tip]:hover::after { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .catalog h1 .ch { animation: none; opacity: 1; transform: none; filter: none; }
+  .forge, .atlas, .postcard { animation: none; }
+}
 </style>
+<!--/BUILD:HEAD-->
 </head>
 <body>
-<canvas id="view"></canvas>
+<!--BUILD:BODY-->
+<canvas id="view" aria-label="Rendered planet. Drag to orbit, scroll to zoom."></canvas>
+
+<div id="ui" class="pre">
+  <div class="left">
+  <header class="catalog" aria-live="polite">
+    <p class="eyebrow label"><span id="designation">—</span><span class="sep"></span><span id="star">—</span></p>
+    <h1 id="name">Orbis</h1>
+    <p class="cls"><span id="class">—</span><span class="esi" id="esi"></span></p>
+  </header>
+
+  <section class="survey" id="survey" aria-label="Survey record">
+    <dl id="stats"></dl>
+  </section>
+  </div>
+
+  <nav class="tools" aria-label="Tools">
+    <button class="icon survey-toggle" id="btn-survey" aria-pressed="false" data-tip="Survey record" aria-label="Survey record">
+      <svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg>
+    </button>
+    <button class="icon" id="btn-atlas" data-tip="Atlas map · A" aria-label="Atlas map">
+      <svg viewBox="0 0 24 24"><path d="M3 6.5l6-2.5 6 2.5 6-2.5v13.5l-6 2.5-6-2.5-6 2.5z M9 4v13.5 M15 6.5V20"/></svg>
+    </button>
+    <button class="icon" id="btn-labels" aria-pressed="false" data-tip="Place names · L" aria-label="Place names">
+      <svg viewBox="0 0 24 24"><path d="M4 7V5h16v2 M12 5v14 M9 19h6"/></svg>
+    </button>
+    <button class="icon" id="btn-sound" aria-pressed="false" data-tip="Sound · M" aria-label="Sound">
+      <svg viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6L8 10z"/><path class="wave" d="M16.5 9a4 4 0 010 6 M19 6.5a7.5 7.5 0 010 11"/></svg>
+    </button>
+    <button class="icon" id="btn-postcard" data-tip="Postcard · P" aria-label="Make a postcard">
+      <svg viewBox="0 0 24 24"><rect x="3.5" y="6.5" width="17" height="12" rx="1.5"/><circle cx="12" cy="12.5" r="3.2"/><path d="M8.5 6.5l1.2-2h4.6l1.2 2"/></svg>
+    </button>
+    <button class="icon" id="btn-share" data-tip="Copy world link" aria-label="Copy world link">
+      <svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1 M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/></svg>
+    </button>
+    <button class="icon mobile-only" id="btn-forge-m" aria-label="Forge" aria-controls="forge">
+      <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+    </button>
+    <button class="icon" id="btn-hide" data-tip="Hide interface · H" aria-label="Hide interface">
+      <svg viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.6"/></svg>
+    </button>
+  </nav>
+
+  <div class="travel">
+    <div class="chips" id="chips" role="radiogroup" aria-label="Kind of world to visit next"></div>
+    <div class="jump">
+      <button class="btn round" id="btn-prev" aria-label="Previous world" disabled>‹</button>
+      <button class="btn primary" id="btn-new">New world <kbd class="kbd-hint">Space</kbd></button>
+      <button class="btn round" id="btn-next" aria-label="Next world" disabled>›</button>
+    </div>
+  </div>
+
+  <button class="btn forge-toggle" id="btn-forge" aria-expanded="false" aria-controls="forge">Forge</button>
+  <aside class="forge" id="forge" hidden aria-label="Forge">
+    <h2>Forge</h2>
+    <p class="sub">Reshape this world. Changes apply instantly and are not saved.</p>
+    <div id="controls" style="display: grid; gap: 12px;"></div>
+    <div class="toggles" id="toggles"></div>
+    <div class="actions">
+      <button class="btn" id="btn-reroll">New terrain</button>
+      <button class="btn" id="btn-reset">Reset</button>
+    </div>
+  </aside>
+
+  <div class="labels" id="labels" aria-hidden="true"></div>
+  <p class="hint" id="hint">Drag to orbit · Scroll or pinch to zoom · Space for a new world</p>
+  <div class="toast" id="toast" role="status"></div>
+</div>
+
+<div class="intro" id="intro">
+  <div>
+    <h1 class="mark">Orb<em>is</em></h1>
+    <p>An atlas of worlds that never existed. Every seed becomes a planet with its own star, weather, seas and moons, rendered live in your browser.</p>
+    <div class="go">
+      <button class="btn primary" id="btn-begin">Begin survey</button>
+      <button class="btn" id="btn-begin-sound">With sound</button>
+    </div>
+    <p class="status" id="intro-status">Preparing the first world</p>
+    <p class="fallback" id="intro-error">This browser could not start WebGL2, which Orbis needs to render planets. Try a recent version of Chrome, Edge, Firefox or Safari.</p>
+  </div>
+</div>
+<!--/BUILD:BODY-->
 <script type="module" src="src/main.js"></script>
 </body>
 </html>

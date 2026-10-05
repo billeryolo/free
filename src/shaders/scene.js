@@ -19,6 +19,7 @@ uniform vec3 uCamPos;
 uniform mat3 uCamBasis;
 uniform float uTanFov;
 uniform float uPixelAngle;
+uniform vec2 uShift;
 
 uniform vec3 uSunDir;
 uniform vec3 uSunColor;
@@ -310,7 +311,7 @@ vec3 shadeMoon(int i, vec3 P, vec3 rd) {
 
 // ---------------------------------------------------------------- main
 void main() {
-  vec2 ndc = vUv * 2.0 - 1.0;
+  vec2 ndc = vUv * 2.0 - 1.0 - uShift;
   float aspect = uRes.x / uRes.y;
   vec3 ro = uCamPos;
   vec3 rd = normalize(uCamBasis * vec3(ndc.x * uTanFov * aspect, ndc.y * uTanFov, 1.0));

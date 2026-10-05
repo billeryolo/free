@@ -34,7 +34,7 @@ const PALETTES = {
     ['#06233a', '#22b3a3', '#e2c6a0', '#4b2266', '#a35d4f', '#4b3a55', '#3c3240', '#ece9ff'],
     ['#0c1c3a', '#2a9fbf', '#d9c09a', '#7a1b2c', '#8a6a3a', '#4d3d36', '#3f3430', '#fff1ec'],
     ['#091a30', '#2fbf8f', '#e6d3a8', '#1c3f78', '#5a7a9a', '#3d4058', '#33343f', '#f0f5ff'],
-    ['#14102a', '#b05ac0', '#e9cfa8', '#8a6d12', '#b0844a', '#5a4630', '#40342a', '#fff5e6'],
+    ['#141a36', '#4a6ab0', '#e9cfa8', '#8a6d12', '#b0844a', '#5a4630', '#40342a', '#fff5e6'],
   ],
   arid: [
     ['#0e3646', '#2f7f86', '#e0b57a', '#7a6a3a', '#c58a4f', '#8a4e2e', '#5e3220', '#efe6da'],
@@ -112,35 +112,55 @@ function palette(rng, list, hueJitter = 0.12, lightJitter = 0.08) {
   return p.map((c, i) => shiftColor(c, i === 3 || i === 4 ? dh + vegShift : dh * 0.5, 1, i === 7 ? 1 : dl));
 }
 
+function valueNoise1D(rng, n) {
+  const pts = Array.from({ length: n + 1 }, () => rng.next());
+  return (x) => {
+    const t = clamp(x, 0, 1) * n;
+    const i = Math.min(n - 1, Math.floor(t));
+    const f = t - i;
+    const s = f * f * (3 - 2 * f);
+    return pts[i] * (1 - s) + pts[i + 1] * s;
+  };
+}
+
 function ringProfile(rng, colA, colB) {
-  const N = 1024;
+  const N = 2048;
   const data = new Uint8Array(N * 4);
   const bands = [];
-  const nb = rng.int(5, 11);
-  for (let i = 0; i < nb; i++) bands.push({ c: rng.float(0, 1), w: rng.float(0.02, 0.18), a: rng.float(0.25, 1) });
+  const nb = rng.int(3, 6);
+  for (let i = 0; i < nb; i++) bands.push({ c: rng.float(0.05, 0.95), w: rng.float(0.05, 0.28), a: rng.float(0.35, 1) });
   const gaps = [];
-  const ng = rng.int(1, 4);
-  for (let i = 0; i < ng; i++) gaps.push({ c: rng.float(0.15, 0.9), w: rng.float(0.004, 0.03) });
-  const freqs = [rng.float(40, 90), rng.float(120, 260), rng.float(300, 520)];
-  const phases = [rng.float(0, 6.28), rng.float(0, 6.28), rng.float(0, 6.28)];
+  const ng = rng.int(1, 3);
+  for (let i = 0; i < ng; i++) gaps.push({ c: rng.float(0.2, 0.9), w: rng.float(0.006, 0.025) });
+  const coarse = valueNoise1D(rng, 24);
+  const mid = valueNoise1D(rng, 140);
+  const fine = valueNoise1D(rng, 700);
+  const tint = valueNoise1D(rng, 9);
   for (let i = 0; i < N; i++) {
     const u = i / (N - 1);
     let d = 0;
     for (const b of bands) d += b.a * Math.exp(-Math.pow((u - b.c) / b.w, 2));
-    d = Math.min(1, d * 0.8);
-    d *= 0.65 + 0.2 * Math.sin(u * freqs[0] + phases[0]) + 0.1 * Math.sin(u * freqs[1] + phases[1]) + 0.05 * Math.sin(u * freqs[2] + phases[2]);
-    for (const g of gaps) d *= 1 - Math.exp(-Math.pow((u - g.c) / g.w, 2));
-    const edge = Math.min(1, u / 0.04) * Math.min(1, (1 - u) / 0.02);
+    d = Math.min(1, d * 0.85 + 0.08);
+    d *= 0.55 + 0.45 * coarse(u);
+    d *= 0.82 + 0.18 * mid(u);
+    d *= 0.9 + 0.1 * fine(u);
+    for (const g of gaps) d *= 1 - 0.95 * Math.exp(-Math.pow((u - g.c) / g.w, 2));
+    const edge = smoothstepJs(0, 0.05, u) * smoothstepJs(1, 0.97, u);
     d = clamp(d * edge, 0, 1);
-    const t = 0.5 + 0.5 * Math.sin(u * 9.0 + phases[0]);
-    const c = mixColor(colA, colB, t * 0.7 + u * 0.3);
-    const lum = 0.8 + 0.4 * Math.sin(u * freqs[1] * 0.5 + phases[2]);
+    // Inner ringlets are dusky, outer ones brighter and icier.
+    const c = mixColor(colA, colB, clamp(tint(u) * 0.8 + u * 0.4, 0, 1));
+    const lum = 0.65 + 0.35 * u + 0.15 * (mid(u) - 0.5);
     data[i * 4 + 0] = clamp(Math.sqrt(c[0] * lum) * 255, 0, 255);
     data[i * 4 + 1] = clamp(Math.sqrt(c[1] * lum) * 255, 0, 255);
     data[i * 4 + 2] = clamp(Math.sqrt(c[2] * lum) * 255, 0, 255);
     data[i * 4 + 3] = d * 255;
   }
   return data;
+}
+
+function smoothstepJs(a, b, x) {
+  const t = clamp((x - a) / (b - a), 0, 1);
+  return t * t * (3 - 2 * t);
 }
 
 function makeStorms(rng, count, big) {
@@ -266,7 +286,7 @@ export function generateWorld(seed, forcedClass) {
     stormCol = shiftColor(hexToLinear(g.storm), dh);
     pal = PALETTES.terran[0].map(hexToLinear);
   } else {
-    pal = palette(rng, PALETTES[cls], cls === 'exotic' ? 0.4 : 0.1);
+    pal = palette(rng, PALETTES[cls], cls === 'exotic' ? 0.25 : 0.1);
   }
   const [deep, shallow, sand, lowWet, lowDry, high, rock, snow] = pal;
 
@@ -320,7 +340,7 @@ export function generateWorld(seed, forcedClass) {
   if (ap) {
     let tau = ap.tau;
     if (!tau) {
-      const hue = rng.pick([[0.11, 0.07, 0.2], [0.05, 0.16, 0.14], [0.16, 0.08, 0.1], [0.06, 0.1, 0.24], [0.12, 0.13, 0.06]]);
+      const hue = rng.pick([[0.11, 0.07, 0.2], [0.05, 0.16, 0.14], [0.16, 0.08, 0.1], [0.06, 0.1, 0.24], [0.1, 0.06, 0.22]]);
       tau = hue;
     }
     const density = rng.float(...ap.density);
@@ -385,8 +405,10 @@ export function generateWorld(seed, forcedClass) {
   if (rng.chance(ringChance)) {
     const inner = rng.float(1.3, 1.7);
     const outer = inner + rng.float(0.45, isGiant ? 1.4 : 0.8);
-    const ra = isGiant ? mixColor(gas[0], gas[2], rng.next()) : mixColor(rock, snow, rng.float(0.3, 0.9));
-    const rb = isGiant ? mixColor(gas[1], [0.9, 0.9, 0.9], 0.4) : mixColor(high, snow, 0.5);
+    const RING_TINTS = [['#8a7a66', '#e8dcc4'], ['#6a6058', '#d8d0c8'], ['#7a6248', '#f0d8b0'], ['#5a6670', '#d8e4ec'], ['#806a5a', '#e8c8a8']];
+    const [ta, tb] = rng.pick(RING_TINTS).map(hexToLinear);
+    const ra = isGiant ? mixColor(gas[2], ta, 0.5) : ta;
+    const rb = isGiant ? mixColor(gas[0], tb, 0.4) : tb;
     rings = { inner, outer, data: ringProfile(rng, ra, rb) };
   }
 

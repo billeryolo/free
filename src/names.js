@@ -13,8 +13,8 @@ const LANGS = [
   },
   {
     // hard, guttural
-    onset: ['k', 'kr', 'dr', 'gr', 't', 'z', 'v', 'b', 'x', 'sk', 'g', 'zh', 'r', 'h', 'q'],
-    vowel: ['a', 'o', 'u', 'e', 'au', 'oa', 'y'],
+    onset: ['k', 'kr', 'dr', 'gr', 't', 'z', 'v', 'b', 'sk', 'g', 'zh', 'r', 'h', 'm', 'n'],
+    vowel: ['a', 'o', 'u', 'e', 'au', 'a', 'o'],
     coda: ['k', 'th', 'g', 'r', 'n', 'x', 'sh', 'rg', 'nd', 'z', 'k', 'v', ''],
     syl: [1, 2],
   },
@@ -35,13 +35,13 @@ const LANGS = [
   {
     // crystalline, sibilant
     onset: ['s', 'z', 'ss', 'sh', 'c', 'x', 'l', 'th', 'ys', 'qu', 'v'],
-    vowel: ['i', 'e', 'y', 'ia', 'ie', 'ae', 'a', 'o'],
+    vowel: ['i', 'e', 'ia', 'ie', 'ae', 'a', 'o', 'i'],
     coda: ['s', 'x', 'th', 'l', 'ss', 'n', 'ra', 'lia', 'ne', ''],
     syl: [2, 3],
   },
 ];
 
-const BAD = /([^aeiouy])\1\1|[^aeiouy]{4}|^[^aeiouy]{3}|(.)\2\2/;
+const BAD = /([^aeiouy])\1\1|[^aeiouy]{4}|^[^aeiouy]{3}|(.)\2\2|[aeiouy]{3}|(.)\3.*(.)\4|^(.).*\5\5/;
 
 function word(rng, lang, minSyl, maxSyl) {
   for (let tries = 0; tries < 40; tries++) {
@@ -51,7 +51,8 @@ function word(rng, lang, minSyl, maxSyl) {
       w += rng.pick(lang.onset) + rng.pick(lang.vowel);
       if (i === n - 1 || rng.chance(0.3)) w += rng.pick(lang.coda);
     }
-    if (w.length < 3 || w.length > 11 || BAD.test(w)) continue;
+    if (w.length < 3 || w.length > 9 || BAD.test(w)) continue;
+    if ((w.match(/[xzqj]/g) || []).length > 1 || (w.match(/y/g) || []).length > 1) continue;
     return w[0].toUpperCase() + w.slice(1);
   }
   return 'Nameless';

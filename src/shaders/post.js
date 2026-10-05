@@ -131,8 +131,9 @@ void main() {
   if (uWarp > 0.001) {
     vec3 acc = vec3(0.0);
     float wsum = 0.0;
+    float jitter = hash(gl_FragCoord.xy + fract(uTime * 7.0) * 113.0);
     for (int i = 0; i < 20; i++) {
-      float t = float(i) / 19.0;
+      float t = (float(i) + jitter) / 20.0;
       float w = 1.0 - t * 0.7;
       acc += sceneAt(uv - fromC * t * uWarp * 0.55) * w;
       wsum += w;
